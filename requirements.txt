@@ -3,3 +3,4 @@ protobuf
 paho-mqtt
 cryptography
 apscheduler
+requests

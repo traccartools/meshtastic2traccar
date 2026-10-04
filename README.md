@@ -33,12 +33,16 @@ Clone this repo and then add this to your `docker-compose.yml` file:
   * `TRACCAR_PASSWORD` is your Traccar server's password.
   * `TRACCAR_KEYWORD` is the attribute name to be set in your device.
   * `TRACCAR_INTERVAL` is the polling time (in seconds) of the traccar devices.
-  * `TRACCAR_OSMAND` is your Traccar server's Osmand protocol URL
+  * `TRACCAR_OSMAND` is your Traccar server's Osmand protocol URL. If omitted, it uses `http://[TRACCAR_HOST]:5055`.
 
 
 ### Traccar
 
-Create a device with arbitrary identifier.  
-Add a device attribute with name = `TRACCAR_KEYWORD` and value = callsign you intend to track.  
+Create a device with an arbitrary identifier.  
+Add a device attribute with name = `TRACCAR_KEYWORD` and one of these values:
+
+* Public packets: the Meshtastic node ID, for example `!12345678`.
+* Private packets: four space-separated values: `!node_id node_public_key !server_id server_private_key`.
+
 Wait `TRACCAR_INTERVAL` seconds in order for the changes takes effect.  
 

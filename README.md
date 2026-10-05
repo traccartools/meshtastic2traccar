@@ -1,48 +1,88 @@
-# About
+# Meshtastic to Traccar
 
-This little Docker container will connect to a Meshtastic MQTT server, decodes POSITION_APP packets and sends device locations to a [Traccar](https://www.traccar.org/) server.
-In a multi-user environment it allows users to configure devices without involving the administrator.  
-## How to
+Docker service that reads Meshtastic `POSITION_APP` packets from MQTT and
+sends matching positions to [Traccar](https://www.traccar.org/) through the
+OsmAnd protocol.
 
-### Docker
-
-Clone this repo and then add this to your `docker-compose.yml` file:
+## Docker Compose
 
 ```yaml
   meshtastic2traccar:
     build: https://github.com/traccartools/meshtastic2traccar.git
-    container_name: meshtastic2traccar  # optional
     environment:
-      - MQTT_SERVER=mqtt.example.com
-      - MQTT_PORT=1883
-      - MQTT_USER=user
-      - MQTT_PASSWORD=pass
-      - MQTT_TOPIC=msh/#
-      - TRACCAR_HOST=https://traccar.example.com  # optional, defaults to http://traccar:8082
-      - TRACCAR_USER=user # optional but recommended
-      - TRACCAR_PASSWORD=pass # optional but recommended
-      - TRACCAR_KEYWORD=meshtastic_in # optional, defaults to meshtastic
-      - TRACCAR_INTERVAL=120 # optional, defaults to 60
-      - TRACCAR_OSMAND=http://traccar.example.com:5055  # optional, defaults to http://[TRACCAR_HOST]:5055
-      - LOG_LEVEL=DEBUG  # optional, defaults to INFO
+      MQTT_SERVER: mqtt.example.com
+      MQTT_PORT: "1883"
+      MQTT_USER: user
+      MQTT_PASSWORD: pass
+      MQTT_TOPIC: msh/#
+      TRACCAR_HOST: http://traccar:8082
+      TRACCAR_USER: user
+      TRACCAR_PASSWORD: pass
+      TRACCAR_OSMAND: http://traccar:5055
+      TRACCAR_KEYWORD: meshtastic
+      TRACCAR_INTERVAL: "60"
+      LOG_LEVEL: INFO
     restart: unless-stopped
-  ```
-  
-  * `TRACCAR_HOST` is your Traccar server's URI/URL. If run in the same docker-compose stack, name your Traccar service `traccar` and omit this env var.
-  * `TRACCAR_USER` is your Traccar server's username. It should be the admin or an admin user with readonly permission.
-  * `TRACCAR_PASSWORD` is your Traccar server's password.
-  * `TRACCAR_KEYWORD` is the attribute name to be set in your device.
-  * `TRACCAR_INTERVAL` is the polling time (in seconds) of the traccar devices.
-  * `TRACCAR_OSMAND` is your Traccar server's Osmand protocol URL. If omitted, it uses `http://[TRACCAR_HOST]:5055`.
+```
 
+  ### Docker options
 
-### Traccar
+  | Option | Description |
+  | --- | --- |
+  | `MQTT_SERVER` | MQTT broker hostname. |
+  | `MQTT_PORT` | MQTT broker port. |
+  | `MQTT_USER` / `MQTT_PASSWORD` | MQTT credentials. |
+  | `MQTT_TOPIC` | MQTT topic to subscribe to. |
+  | `TRACCAR_HOST` | Traccar API URL. |
+  | `TRACCAR_USER` / `TRACCAR_PASSWORD` | Traccar API credentials used to read devices and attributes. |
+  | `TRACCAR_OSMAND` | Traccar OsmAnd endpoint, normally port `5055`. |
+  | `TRACCAR_KEYWORD` | Prefix used for Traccar mapping attributes. Default: `meshtastic`. |
+  | `TRACCAR_INTERVAL` | Seconds between Traccar device polls. Default: `60`. |
+  | `LOG_LEVEL` | Logging level, for example `INFO` or `DEBUG`. |
 
-Create a device with an arbitrary identifier.  
-Add a device attribute with name = `TRACCAR_KEYWORD` and one of these values:
+  `TRACCAR_KEYWORD` defines the attribute name used for the mapping. For
+  example, with `TRACCAR_KEYWORD=meshtastic`, use attributes named
+  `meshtastic`, `meshtastic1`, `meshtastic2`, and so on. The value of each
+  attribute is the public or private mapping described below.
 
-* Public packets: the Meshtastic node ID, for example `!12345678`.
-* Private packets: four space-separated values: `!node_id node_public_key !server_id server_private_key`.
+## Traccar mapping
 
-Wait `TRACCAR_INTERVAL` seconds in order for the changes takes effect.  
+Create a Traccar device and add an attribute named `meshtastic` (or
+`meshtastic1`, `meshtastic2`, etc.). The attribute value selects the position
+type.
+
+### Public position
+
+Use the Meshtastic node ID:
+
+```text
+!12345678
+```
+
+The packet sender is matched to this ID and decrypted with the channel key.
+
+### Private position
+
+Meshtastic normally broadcasts position packets publicly. Private position
+packets require a custom Meshtastic firmware that sends the position through
+the encrypted PKI channel; this is not enabled by the standard firmware.
+
+Use four space-separated fields:
+
+```text
+!node_id node_public_key !server_id server_private_key
+```
+
+Example:
+
+```text
+!12345678 OvK2BQpCotPQdl38F8ICT3wOVbZISyu+thNZn1NJ3xI= !87654321 QGWR4kGqel2piIgQqVNncTErRwrdozQtcuKZ6/HhBlI=
+```
+
+The application matches both sender and destination, then decrypts the packet
+with the node public key and server private key. Keys must be base64-encoded
+32-byte Curve25519 keys.
+
+`node_id` and `server_id` must contain eight hexadecimal digits prefixed by
+`!`. Changes are applied after the next `TRACCAR_INTERVAL` poll.
 

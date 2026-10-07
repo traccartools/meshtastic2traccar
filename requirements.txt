@@ -4,3 +4,4 @@ paho-mqtt
 cryptography
 apscheduler
 requests
+geopy

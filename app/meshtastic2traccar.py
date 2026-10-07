@@ -4,6 +4,7 @@ import logging
 import os
 import signal
 
+from geopy.distance import geodesic
 import requests
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -49,6 +50,20 @@ class Meshtastic2Traccar():
             on_message=self.on_message,
         )
         self.channel_keys = self.MeshtasticMqtt.get_channel_keys()
+
+    @staticmethod
+    def position_accuracy(latitude: float, longitude: float, precision_bits: int) -> int:
+        """Return the maximum geodesic distance from the cell center to a corner."""
+        if precision_bits >= 32:
+            return 0
+
+        half_cell_degrees = 2 ** (31 - max(precision_bits, 10)) * 1e-7
+        corners = [
+            (latitude + half_cell_degrees, longitude + half_cell_degrees),
+            (latitude - half_cell_degrees, longitude - half_cell_degrees),
+        ]
+
+        return round(max(geodesic((latitude, longitude), corner).meters for corner in corners))
 
     def start(self):
         self.MeshtasticMqtt.start()
@@ -177,8 +192,9 @@ class Meshtastic2Traccar():
         
         name = self.MeshtasticMqtt.dec2hex(getattr(mp, "from"))
         # print(pl.precision_bits)
-        accuracy = int(23300 / 2 ** (max(pl.precision_bits, 10) - 10))
-        # print(accuracy)
+        # Previous approximation: latitude semi-cell size at precision 10.
+        # accuracy = int(23300 / 2 ** (max(pl.precision_bits, 10) - 10))
+        accuracy = self.position_accuracy(lat, lon, pl.precision_bits)
 
         speed = pl.ground_speed
         course = 0
